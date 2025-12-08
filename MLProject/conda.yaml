@@ -1,0 +1,13 @@
+name: obesity-ci-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - pandas
+      - numpy
+      - scikit-learn==1.5.2
+      - mlflow
+      - joblib
+      - matplotlib
