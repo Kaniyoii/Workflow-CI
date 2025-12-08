@@ -1,0 +1,68 @@
+name: CI Retrain Obesity Model (MLflow Project)
+
+on:
+  push:
+    paths:
+      - "MLProject/**"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch: {}
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Setup miniconda
+      - name: Set up Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          miniconda-version: "latest"
+          python-version: "3.12"
+
+      # Install dependencies modelling.py
+      - name: Install dependencies
+        shell: bash -l {0}
+        run: |
+          conda activate base
+          python --version
+          python -m pip install --upgrade pip
+          pip install mlflow pandas numpy scikit-learn joblib matplotlib
+
+      # Retrain via MLflow Project
+      - name: Run MLflow Project (retrain)
+        shell: bash -l {0}
+        run: |
+          conda activate base
+          export MLFLOW_TRACKING_URI="file:${GITHUB_WORKSPACE}/MLProject/mlruns"
+          python -m mlflow run MLProject --experiment-name obesity-ci
+
+      # Login Docker Hub
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Build docker image 
+      - name: Build Docker image with MLflow
+        shell: bash -l {0}
+        run: |
+          conda activate base
+          python -m mlflow models build-docker --model-uri exported_model --name obesity-mlflow
+          docker tag obesity-mlflow ${{ secrets.DOCKERHUB_USERNAME }}/obesity-ci-mlflow:latest
+
+      # Push image ke Docker Hub repo kamu
+      - name: Push Docker Image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/obesity-ci-mlflow:latest
+
+      # Upload artifacts mlruns biar tersimpan di Actions
+      - name: Upload MLflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlruns-artifacts
+          path: MLProject/mlruns
